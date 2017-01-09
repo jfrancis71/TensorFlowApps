@@ -81,49 +81,43 @@ def processImage():
 
     pilImage = img.convert( 'L' )
 
-    ret = CNObjectLocalization( pilImage, 0.997 )
+    ret = CNObjectLocalization( pilImage, 0.9 )
 
 def eventLoop():
     processImage()
     if ( sys.argv[1] == "cam" ):
        root.after( 200, eventLoop )
 
-def conv2d(x, W):
-  return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='VALID')
+def conv2d(x, w):
+  return w[0] + tf.nn.conv2d(x, w[1], strides=[1, 1, 1, 1], padding='VALID')
 
 def max_pool_2x2(x):
   return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
-with open('conv1weights.json', 'r') as infile:
-    W_conv1 = tf.Variable( json.load( infile) )
-with open('conv1bias.json', 'r') as infile:
-    b_conv1 = tf.Variable( json.load( infile ) )
+def CNReadConv2DWeights( fileName ):
+    with open(fileName, 'r') as infile:
+        j = json.load( infile )
+        b = tf.Variable( j[0] )
+        W = tf.Variable( j[1] )
+    return (b, W)
 
-with open('conv2weights.json', 'r') as infile:
-    W_conv2 = tf.Variable( json.load( infile) )
-with open('conv2bias.json', 'r') as infile:
-    b_conv2 = tf.Variable( json.load( infile ) )
-
-with open('conv3weights.json', 'r') as infile:
-    W_conv3 = tf.Variable( json.load( infile) )
-with open('conv3bias.json', 'r') as infile:
-    b_conv3 = tf.Variable( json.load( infile ) )
-
-with open('conv4weights.json', 'r') as infile:
-    W_conv4 = tf.Variable( json.load( infile) )
+conv1Weights = CNReadConv2DWeights( 'conv1.json' )
+conv2Weights = CNReadConv2DWeights( 'conv2.json' )
+conv3Weights = CNReadConv2DWeights( 'conv3.json' )
+conv4Weights = CNReadConv2DWeights( 'conv4.json' )
 
 def buildGraph( x_image ):
 
-    h_conv1 = tf.nn.tanh( b_conv1 + conv2d(x_image, W_conv1) )
+    h_conv1 = tf.nn.tanh( conv2d(x_image, conv1Weights ) )
     h_pool1 = max_pool_2x2(h_conv1)
 
-    h_conv2 = tf.nn.tanh( b_conv2 + conv2d(h_pool1, W_conv2) )
+    h_conv2 = tf.nn.tanh( conv2d(h_pool1, conv2Weights) )
     h_pool2 = max_pool_2x2(h_conv2)
 
-    h_conv3 = tf.nn.tanh( b_conv3 + conv2d(h_pool2, W_conv3) )
+    h_conv3 = tf.nn.tanh( conv2d(h_pool2, conv3Weights) )
 
-    h_conv4 = tf.nn.sigmoid( -.61 + conv2d(h_conv3, W_conv4) )
+    h_conv4 = tf.nn.sigmoid( conv2d(h_conv3, conv4Weights) )
 
     return ( h_conv4 )
 
