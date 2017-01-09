@@ -28,18 +28,27 @@ import numpy as nd
 
 stationNo = "2"
 
-def CNObjectLocalizationConvolve( pilImage, threshold=0.9 ):
+def buildImagePyramid( pilImage ):
+    images = []
+    for s in range( -1 + int( ( math.log( 32 ) - math.log( pilImage.width ) ) / math.log (.8 ) ) ):
+        height = pilImage.height * .8**s
+        width  = pilImage.width * .8**s
+        print( "idx = ", s, " width = ", width )
+        images.append( pilImage.resize( ( int(width), int(height) ) ) )
+    return images
+
+def CNObjectLocalizationConvolve( pilImage, model, threshold=0.9 ):
     start= time.clock()
     npImage = nd.array( pilImage ) / 255.0
     tfImage = [ nd.array( [ npImage ] ).transpose( (1,2,0) ) ]
 
-    x_image = tf.placeholder( tf.float32, shape=[ 1, pilImage.height, pilImage.width, 1 ] )
+    #x_image = tf.placeholder( tf.float32, shape=[ 1, pilImage.height, pilImage.width, 1 ] )
     print (pilImage.height)
     print (pilImage.width)
-    result = buildGraph( x_image )
-    sess.run(tf.global_variables_initializer())
+    #result = buildGraph( x_image )
+    #sess.run(tf.global_variables_initializer())
     mstart = time.clock()
-    tfOutput = sess.run( result, feed_dict={x_image: tfImage,} )
+    tfOutput = sess.run( model[1], feed_dict={model[0]: tfImage,} )
     print (" Main: ", time.clock() - mstart)
     extractPositions = np.transpose( np.nonzero( tfOutput[0][:,:,0] > threshold ) )
     print (extractPositions)
@@ -54,12 +63,9 @@ def CNObjectLocalization( pilImage, threshold=0.9 ):
     label_image.pack(side = tkinter.TOP, expand=True, fill=tkinter.BOTH)
     label_image.create_image( 120,160, image=tkImage )
 
-    for s in range( -1 + int( ( math.log( 32 ) - math.log( pilImage.width ) ) / math.log (.8 ) ) ):
-        height = pilImage.height * .8**s
-        width  = pilImage.width * .8**s
-        print( "idx = ", s, " width = ", width )
-        objs = CNObjectLocalizationConvolve( pilImage.resize( ( int(width), int(height) ) ), threshold )
-#    objs = [ ( 1,1 ) ]
+    images = buildImagePyramid( pilImage )
+    for s in range( len( images ) ):
+        objs = CNObjectLocalizationConvolve( images[s], global_graph[s], threshold )
         for obj in objs:
             label_image.create_rectangle( 16 + obj[0]-16, 16 + obj[1]-16, 16 + obj[0]+16, 16 + obj[1]+16, outline='green', width=3 )
 
@@ -121,11 +127,25 @@ def buildGraph( x_image ):
 
     return ( h_conv4 )
 
+def initialize():
+    initImgs = buildImagePyramid( Image.new( 'L', (240,320), 0 ) )
+    gl = []
+    for s in range( len(initImgs) ):
+        x_image = tf.placeholder( tf.float32, shape=[ 1, initImgs[s].height, initImgs[s].width, 1 ] )
+        gr1 = buildGraph( x_image )
+        gl.append( (x_image, gr1 ) )
+
+    return gl
+
 root = tkinter.Tk()
 root.geometry( '%dx%d' % (240,320) )
 label_image = tkinter.Canvas( root )
 
 sess = tf.Session()
+
+global_graph = initialize()
+
+sess.run(tf.global_variables_initializer())
 
 eventLoop()
 
