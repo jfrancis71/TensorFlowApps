@@ -37,37 +37,35 @@ def buildImagePyramid( pilImage ):
         images.append( pilImage.resize( ( int(width), int(height) ) ) )
     return images
 
-def CNObjectLocalizationConvolve( pilImage, model, threshold=0.9 ):
-    start= time.clock()
-    npImage = nd.array( pilImage ) / 255.0
-    tfImage = [ nd.array( [ npImage ] ).transpose( (1,2,0) ) ]
-
-    #x_image = tf.placeholder( tf.float32, shape=[ 1, pilImage.height, pilImage.width, 1 ] )
-    print (pilImage.height)
-    print (pilImage.width)
-    #result = buildGraph( x_image )
-    #sess.run(tf.global_variables_initializer())
-    mstart = time.clock()
-    tfOutput = sess.run( model[1], feed_dict={model[0]: tfImage,} )
-    print (" Main: ", time.clock() - mstart)
-    extractPositions = np.transpose( np.nonzero( tfOutput[0][:,:,0] > threshold ) )
-    print (extractPositions)
+def extractObjects( outputPyramid, threshold ):
+    extractPositions = np.transpose( np.nonzero( outputPyramid[0][0][:,:,0] > threshold ) )
     origCoords = list( map( lambda x: (x[1]*4,x[0]*4), extractPositions ) )
-    print (origCoords)
-    print ("Time taken = ", time.clock() - start)
     return origCoords
 
 def CNObjectLocalization( pilImage, threshold=0.9 ):
+    start= time.clock()
     tkImage = ImageTk.PhotoImage( pilImage )
     label_image.img = tkImage
     label_image.pack(side = tkinter.TOP, expand=True, fill=tkinter.BOTH)
     label_image.create_image( 120,160, image=tkImage )
 
     images = buildImagePyramid( pilImage )
+    tfOutputs = []
+    tfImages = []
     for s in range( len( images ) ):
-        objs = CNObjectLocalizationConvolve( images[s], global_graph[s], threshold )
-        for obj in objs:
-            label_image.create_rectangle( 16 + obj[0]-16, 16 + obj[1]-16, 16 + obj[0]+16, 16 + obj[1]+16, outline='green', width=3 )
+        tfOutputs.append( global_graph[s][1] )
+        npImage = nd.array( images[s] ) / 255.0
+        tfImages.append( [ nd.array( [ npImage ] ).transpose( (1,2,0) ) ] )
+
+    fd = { global_graph[s][0] : tfImages[s] for s in range( len( tfImages ) ) }
+
+    outputPyramid = sess.run( tfOutputs, feed_dict = fd )
+
+    objs = extractObjects( outputPyramid, threshold )
+    
+    for obj in objs:
+        label_image.create_rectangle( 16 + obj[0]-16, 16 + obj[1]-16, 16 + obj[0]+16, 16 + obj[1]+16, outline='green', width=3 )
+    print( "Time lapsed=", time.clock() - start )
 
 
 def processImage():
