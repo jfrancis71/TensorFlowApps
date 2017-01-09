@@ -69,24 +69,26 @@ def CNObjectLocalization( pilImage, threshold=0.9 ):
 
     print( "Time lapsed=", time.clock() - start )
 
+fileSource = sys.argv[2]
+
 
 def processImage():
-    if ( sys.argv[1] == "cam" ):
+    if ( fileSource == "cam" ):
        response = requests.get(  "http://192.168.0." + stationNo + "/image.jpg" )
        file = BytesIO( response.content )
        img = Image.open( file )
        img = img.resize( ( 240, 320 ) )
     else:
-       img = Image.open( sys.argv[1] )
+       img = Image.open( fileSource )
 
     pilImage = img.convert( 'L' )
 
-    ret = CNObjectLocalization( pilImage, 0.9 )
+    ret = CNObjectLocalization( pilImage, 0.997 )
 
 def eventLoop():
     processImage()
-    if ( sys.argv[1] == "cam" ):
-       root.after( 200, eventLoop )
+    if ( fileSource == "cam" ):
+       root.after( 5, eventLoop )
 
 def conv2d(x, w):
   return w[0] + tf.nn.conv2d(x, w[1], strides=[1, 1, 1, 1], padding='VALID')
@@ -102,10 +104,11 @@ def CNReadConv2DWeights( fileName ):
         W = tf.Variable( j[1] )
     return (b, W)
 
-conv1Weights = CNReadConv2DWeights( 'conv1.json' )
-conv2Weights = CNReadConv2DWeights( 'conv2.json' )
-conv3Weights = CNReadConv2DWeights( 'conv3.json' )
-conv4Weights = CNReadConv2DWeights( 'conv4.json' )
+modelDir = sys.argv[1]
+conv1Weights = CNReadConv2DWeights( modelDir + '/' + 'conv1.json' )
+conv2Weights = CNReadConv2DWeights( modelDir + '/' + 'conv2.json' )
+conv3Weights = CNReadConv2DWeights( modelDir + '/' + 'conv3.json' )
+conv4Weights = CNReadConv2DWeights( modelDir + '/' + 'conv4.json' )
 
 def buildGraph( x_image ):
 
