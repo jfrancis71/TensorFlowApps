@@ -37,8 +37,8 @@ def buildImagePyramid( pilImage ):
         images.append( pilImage.resize( ( int(width), int(height) ) ) )
     return images
 
-def extractObjects( outputPyramid, threshold ):
-    extractPositions = np.transpose( np.nonzero( outputPyramid[0][0][:,:,0] > threshold ) )
+def extractObjects( outputMap, threshold ):
+    extractPositions = np.transpose( np.nonzero( outputMap[0][:,:,0] > threshold ) )
     origCoords = list( map( lambda x: (x[1]*4,x[0]*4), extractPositions ) )
     return origCoords
 
@@ -61,10 +61,12 @@ def CNObjectLocalization( pilImage, threshold=0.9 ):
 
     outputPyramid = sess.run( tfOutputs, feed_dict = fd )
 
-    objs = extractObjects( outputPyramid, threshold )
-    
-    for obj in objs:
-        label_image.create_rectangle( 16 + obj[0]-16, 16 + obj[1]-16, 16 + obj[0]+16, 16 + obj[1]+16, outline='green', width=3 )
+    for s in range( len( images ) ):
+        objs = extractObjects( outputPyramid[s], threshold )
+        scale = pilImage.width / images[s].width
+        for obj in objs:
+            label_image.create_rectangle( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16), outline='green', width=3 )
+
     print( "Time lapsed=", time.clock() - start )
 
 
@@ -79,7 +81,7 @@ def processImage():
 
     pilImage = img.convert( 'L' )
 
-    ret = CNObjectLocalization( pilImage, 0.9 )
+    ret = CNObjectLocalization( pilImage, 0.997 )
 
 def eventLoop():
     processImage()
