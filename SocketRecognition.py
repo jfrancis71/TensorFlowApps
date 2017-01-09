@@ -8,20 +8,25 @@
 import tensorflow as tf
 
 import urllib
-import cStringIO
+import io
 from PIL import Image
 from PIL import ImageTk
 from PIL import ImageDraw
-import Tkinter
+import tkinter
 import numpy as np
 import json
 import time
 import sys
 import math
+import urllib.request as ur
+import urllib.request
+from io import BytesIO
+import requests
+
 
 import numpy as nd
 
-stationNo = "62"
+stationNo = "2"
 
 def CNObjectLocalizationConvolve( pilImage, threshold=0.9 ):
     start= time.clock()
@@ -29,24 +34,24 @@ def CNObjectLocalizationConvolve( pilImage, threshold=0.9 ):
     tfImage = [ nd.array( [ npImage ] ).transpose( (1,2,0) ) ]
 
     x_image = tf.placeholder( tf.float32, shape=[ 1, pilImage.height, pilImage.width, 1 ] )
-    print pilImage.height
-    print pilImage.width
+    print (pilImage.height)
+    print (pilImage.width)
     result = buildGraph( x_image )
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
     mstart = time.clock()
     tfOutput = sess.run( result, feed_dict={x_image: tfImage,} )
-    print " Main: ", time.clock() - mstart
+    print (" Main: ", time.clock() - mstart)
     extractPositions = np.transpose( np.nonzero( tfOutput[0][:,:,0] > threshold ) )
-    print extractPositions
-    origCoords = list( map( lambda (y,x): (x*4,y*4), extractPositions ) )
-    print origCoords
-    print "Time taken = ", time.clock() - start
+    print (extractPositions)
+    origCoords = list( map( lambda x: (x[1]*4,x[0]*4), extractPositions ) )
+    print (origCoords)
+    print ("Time taken = ", time.clock() - start)
     return origCoords
 
 def CNObjectLocalization( pilImage, threshold=0.9 ):
     tkImage = ImageTk.PhotoImage( pilImage )
     label_image.img = tkImage
-    label_image.pack(side = Tkinter.TOP, expand=True, fill=Tkinter.BOTH)
+    label_image.pack(side = tkinter.TOP, expand=True, fill=tkinter.BOTH)
     label_image.create_image( 120,160, image=tkImage )
 
     for s in range( -1 + int( ( math.log( 32 ) - math.log( pilImage.width ) ) / math.log (.8 ) ) ):
@@ -61,7 +66,8 @@ def CNObjectLocalization( pilImage, threshold=0.9 ):
 
 def processImage():
     if ( sys.argv[1] == "cam" ):
-       file = cStringIO.StringIO( urllib.urlopen( "http://192.168.0." + stationNo + "/image.jpg").read() )
+       response = requests.get(  "http://192.168.0." + stationNo + "/image.jpg" )
+       file = BytesIO( response.content )
        img = Image.open( file )
        img = img.resize( ( 240, 320 ) )
     else:
@@ -115,9 +121,9 @@ def buildGraph( x_image ):
 
     return ( h_conv4 )
 
-root = Tkinter.Tk()
+root = tkinter.Tk()
 root.geometry( '%dx%d' % (240,320) )
-label_image = Tkinter.Canvas( root )
+label_image = tkinter.Canvas( root )
 
 sess = tf.Session()
 
