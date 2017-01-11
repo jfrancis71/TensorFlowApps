@@ -26,8 +26,6 @@ import requests
 
 import numpy as nd
 
-stationNo = "2"
-
 def buildImagePyramid( pilImage ):
     images = []
     for s in range( -1 + int( ( math.log( 32 ) - math.log( pilImage.width ) ) / math.log (.8 ) ) ):
@@ -42,7 +40,7 @@ def extractObjects( outputMap, threshold ):
     origCoords = list( map( lambda x: (x[1]*4,x[0]*4), extractPositions ) )
     return origCoords
 
-def CNObjectLocalization( pilImage, threshold=0.9 ):
+def CNObjectLocalization( pilImage, label_image, sess, tfGraphs, colorF, threshold=0.9 ):
     start= time.clock()
     tkImage = ImageTk.PhotoImage( pilImage )
     label_image.img = tkImage
@@ -50,14 +48,19 @@ def CNObjectLocalization( pilImage, threshold=0.9 ):
     label_image.create_image( 120,160, image=tkImage )
 
     images = buildImagePyramid( pilImage )
+
+    npImages = []
+    for s in range( len( images ) ):
+        npImage = nd.array( images[s] ) / 255.0
+        npImages.append( npImage )
+
     tfOutputs = []
     tfImages = []
     for s in range( len( images ) ):
-        tfOutputs.append( global_graph[s][1] )
-        npImage = nd.array( images[s] ) / 255.0
-        tfImages.append( [ nd.array( [ npImage ] ).transpose( (1,2,0) ) ] )
+        tfOutputs.append( tfGraphs[s][1] )
+        tfImages.append( [ nd.array( [ npImages[s] ] ).transpose( (1,2,0) ) ] )
 
-    fd = { global_graph[s][0] : tfImages[s] for s in range( len( tfImages ) ) }
+    fd = { tfGraphs[s][0] : tfImages[s] for s in range( len( tfImages ) ) }
 
     outputPyramid = sess.run( tfOutputs, feed_dict = fd )
 
@@ -65,37 +68,10 @@ def CNObjectLocalization( pilImage, threshold=0.9 ):
         objs = extractObjects( outputPyramid[s], threshold )
         scale = pilImage.width / images[s].width
         for obj in objs:
-            label_image.create_rectangle( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16), outline='green', width=3 )
+            col = colorF( npImages[s][obj[1]:obj[1]+32,obj[0]:obj[0]+32] )
+            label_image.create_rectangle( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16), outline=col, width=3 )
 
     print( "Time lapsed=", time.clock() - start )
-
-fileSource = sys.argv[2]
-
-
-def processImage():
-    if ( fileSource == "cam" ):
-       response = requests.get(  "http://192.168.0." + stationNo + "/image.jpg" )
-       file = BytesIO( response.content )
-       img = Image.open( file )
-       img = img.resize( ( 240, 320 ) )
-    else:
-       img = Image.open( fileSource )
-
-    pilImage = img.convert( 'L' )
-
-    ret = CNObjectLocalization( pilImage, 0.997 )
-
-def eventLoop():
-    processImage()
-    if ( fileSource == "cam" ):
-       root.after( 5, eventLoop )
-
-def conv2d(x, w):
-  return w[0] + tf.nn.conv2d(x, w[1], strides=[1, 1, 1, 1], padding='VALID')
-
-def max_pool_2x2(x):
-  return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
-                        strides=[1, 2, 2, 1], padding='SAME')
 
 def CNReadConv2DWeights( fileName ):
     with open(fileName, 'r') as infile:
@@ -104,13 +80,20 @@ def CNReadConv2DWeights( fileName ):
         W = tf.Variable( j[1] )
     return (b, W)
 
-modelDir = sys.argv[1]
-conv1Weights = CNReadConv2DWeights( modelDir + '/' + 'conv1.json' )
-conv2Weights = CNReadConv2DWeights( modelDir + '/' + 'conv2.json' )
-conv3Weights = CNReadConv2DWeights( modelDir + '/' + 'conv3.json' )
-conv4Weights = CNReadConv2DWeights( modelDir + '/' + 'conv4.json' )
+#   Note the first part of w is the biases, the second is the weights
+def conv2d(x, w):
+  return w[0] + tf.nn.conv2d(x, w[1], strides=[1, 1, 1, 1], padding='VALID')
 
-def buildGraph( x_image ):
+def max_pool_2x2(x):
+  return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
+                        strides=[1, 2, 2, 1], padding='SAME')
+
+def buildObjectRecognitionGraph( x_image, modelDir ):
+
+    conv1Weights = CNReadConv2DWeights( modelDir + '/' + 'conv1.json' )
+    conv2Weights = CNReadConv2DWeights( modelDir + '/' + 'conv2.json' )
+    conv3Weights = CNReadConv2DWeights( modelDir + '/' + 'conv3.json' )
+    conv4Weights = CNReadConv2DWeights( modelDir + '/' + 'conv4.json' )
 
     h_conv1 = tf.nn.tanh( conv2d(x_image, conv1Weights ) )
     h_pool1 = max_pool_2x2(h_conv1)
@@ -123,27 +106,3 @@ def buildGraph( x_image ):
     h_conv4 = tf.nn.sigmoid( conv2d(h_conv3, conv4Weights) )
 
     return ( h_conv4 )
-
-def initialize():
-    initImgs = buildImagePyramid( Image.new( 'L', (240,320), 0 ) )
-    gl = []
-    for s in range( len(initImgs) ):
-        x_image = tf.placeholder( tf.float32, shape=[ 1, initImgs[s].height, initImgs[s].width, 1 ] )
-        gr1 = buildGraph( x_image )
-        gl.append( (x_image, gr1 ) )
-
-    return gl
-
-root = tkinter.Tk()
-root.geometry( '%dx%d' % (240,320) )
-label_image = tkinter.Canvas( root )
-
-sess = tf.Session()
-
-global_graph = initialize()
-
-sess.run(tf.global_variables_initializer())
-
-eventLoop()
-
-root.mainloop()
