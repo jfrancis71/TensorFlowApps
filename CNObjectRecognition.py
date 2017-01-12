@@ -73,12 +73,13 @@ def CNObjectLocalization( pilImage, label_image, sess, tfGraphs, colorF, thresho
 
     print( "Time lapsed=", time.clock() - start )
 
-def CNReadConv2DWeights( fileName ):
-    with open(fileName, 'r') as infile:
-        j = json.load( infile )
-        b = tf.Variable( j[0] )
-        W = tf.Variable( j[1] )
-    return (b, W)
+def CNConv2DWeights( layer ):
+    return ( layer[0], layer[1] )
+
+def CNReadNN( fileName ):
+    with open( fileName, 'r' ) as infile:
+       j = json.load( infile )
+    return j
 
 #   Note the first part of w is the biases, the second is the weights
 def conv2d(x, w):
@@ -88,21 +89,18 @@ def max_pool_2x2(x):
   return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
-def buildObjectRecognitionGraph( x_image, modelDir ):
+def buildObjectRecognitionGraph( x_image, modelFilename ):
 
-    conv1Weights = CNReadConv2DWeights( modelDir + '/' + 'conv1.json' )
-    conv2Weights = CNReadConv2DWeights( modelDir + '/' + 'conv2.json' )
-    conv3Weights = CNReadConv2DWeights( modelDir + '/' + 'conv3.json' )
-    conv4Weights = CNReadConv2DWeights( modelDir + '/' + 'conv4.json' )
+    modelNet = CNReadNN( modelFilename )
 
-    h_conv1 = tf.nn.tanh( conv2d(x_image, conv1Weights ) )
+    h_conv1 = tf.nn.tanh( conv2d(x_image, CNConv2DWeights( modelNet[0] ) ) )
     h_pool1 = max_pool_2x2(h_conv1)
 
-    h_conv2 = tf.nn.tanh( conv2d(h_pool1, conv2Weights) )
+    h_conv2 = tf.nn.tanh( conv2d(h_pool1, CNConv2DWeights( modelNet[1] ) ) )
     h_pool2 = max_pool_2x2(h_conv2)
 
-    h_conv3 = tf.nn.tanh( conv2d(h_pool2, conv3Weights) )
+    h_conv3 = tf.nn.tanh( conv2d(h_pool2, CNConv2DWeights( modelNet[2] ) ) )
 
-    h_conv4 = tf.nn.sigmoid( conv2d(h_conv3, conv4Weights) )
+    h_conv4 = tf.nn.sigmoid( conv2d(h_conv3, CNConv2DWeights( modelNet[3] ) ) )
 
     return ( h_conv4 )
