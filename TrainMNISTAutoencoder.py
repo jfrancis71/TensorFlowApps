@@ -1,6 +1,12 @@
+# Attempt at implementing autoencoder for MNIST
+# Multiple variations of this have been tried, eg. the linear (PCA),
+# sigmoidal, and denoising. None of them end up producing local filters
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+
+import numpy
 
 import argparse
 import sys
@@ -20,10 +26,13 @@ mnist = input_data.read_data_sets('tmp/tensorflow/mnist/input_data', one_hot=Tru
 
 # Create the model
 x = tf.placeholder(tf.float32, [None, 784])
-W1 = tf.Variable(tf.truncated_normal([784, 100], stddev=.1))
- 
-b1 = tf.Variable(tf.zeros([100]))
-h = tf.matmul(x, W1) + b1
+W1 = tf.Variable(tf.truncated_normal([784, 500], stddev=.1))
+
+b1 = tf.Variable(tf.zeros([500]))
+
+x1 = x * ( numpy.random.rand( 100, 784 ) < .7 )
+
+h = tf.nn.sigmoid( tf.matmul(x1, W1) + b1 )
 
 W2 = tf.transpose( W1 )
 b2 = tf.Variable(tf.zeros([784]))
@@ -78,5 +87,5 @@ for _ in range(100000):
   step = step + 1
   save_path = saver.save( sess, args.save )
 
-with open('weights.json', 'w') as outfile:
+  with open('weights.json', 'w') as outfile:
     json.dump(sess.run( W1 ).tolist(), outfile)
