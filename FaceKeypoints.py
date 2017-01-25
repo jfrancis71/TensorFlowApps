@@ -20,9 +20,9 @@ def readData( fileName ):
 
 #Most basic model of all, simple linear regression
 #old, from previous run b = [ 0.35217056 -0.20918441 -0.35843661 -0.20155163]
-#Validation =  .0047062, overfitting 0.659
-#training means of 1:5000 = {0.381106, -0.218601, -0.372067, -0.211748}
-#Applying training mean to validation 6000:7034 gives loss 0.00434512
+#Validation =  .00534, overfitting 0.659
+#training means of 1:6000 = {0.382405, -0.216675, -0.370396, -0.209863}
+#Applying training mean to validation 6000:7034 gives loss 0.005211
 def model1():
   x_flat = tf.reshape( x, [-1, 96*96 ] ) / 255
   yt = ( y_ - 48 ) / 48
@@ -36,7 +36,7 @@ def model1():
   return loss
 
 #Basic neural net model with single hidden layer
-#Validation =  0.00309786, overfitting .663863
+#Validation =  0.003921, overfitting .663074
 def model2():
   x_flat = tf.reshape( x, [-1, 96*96 ] ) / 255
   yt = ( y_ - 48 ) / 48
@@ -90,11 +90,11 @@ loss_summary = tf.summary.scalar( 'loss', loss )
 merged = tf.summary.merge_all()
 
 for epoch in range(100000):
-  for batch in batch_process( images[:5000], features[:5000] ):
+  for batch in batch_process( images[:6000], features[:6000] ):
     sess.run(train_step, feed_dict={ x: batch[0], y_: batch[1] } )
 
-  [ train_loss, summary_str ] = sess.run( [ loss, merged ], feed_dict= {x: images[:5000], y_: features[:5000] } )
+  [ train_loss, summary_str ] = sess.run( [ loss, merged ], feed_dict= {x: images[:6000], y_: features[:6000] } )
   train_summary_writer.add_summary( summary_str)
-  [ validation_loss, summary_str ] = sess.run( [ loss, merged ], feed_dict= {x: images[5001:], y_: features[5001:] } )
+  [ validation_loss, summary_str ] = sess.run( [ loss, merged ], feed_dict= {x: images[6000:], y_: features[6000:] } )
   validation_summary_writer.add_summary( summary_str )
   print( "Train=", train_loss, "Validation=", validation_loss, "Overfitting=", train_loss/validation_loss )
