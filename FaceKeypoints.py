@@ -100,11 +100,13 @@ def model3():
   b_fc2 = bias_variable([500])
   h_fc2 = tf.nn.relu(tf.matmul(h_fc1, W_fc2) + b_fc2)
 
-  W_fc2 = weight_variable([500, 4])
-  b_fc2 = bias_variable([4])
-  y_conv = tf.matmul(h_fc2, W_fc2) + b_fc2
+  W_fc3 = weight_variable([500, 4])
+  b_fc3 = bias_variable([4])
+  y_conv = tf.matmul(h_fc2, W_fc3) + b_fc3
 
   loss = tf.reduce_mean( tf.pow( ( y_conv - yt ), 2 ) )
+
+  tf.image_summary( "W1", tf.transpose( W_conv1, [ 3, 0, 1, 2 ] ) )
 
   return loss
 
@@ -129,6 +131,8 @@ parser.add_argument("-datafile",
                     help="HDF5 file containing training and validation data")
 parser.add_argument("-logdir",
                     help="logging directory")
+parser.add_argument("-checkpointfile",
+                    help="file to store saved model")
 args = parser.parse_args()
 
 ( images, features ) = readData( args.datafile)
@@ -146,9 +150,11 @@ sess.run( tf.global_variables_initializer() )
 
 train_summary_writer = tf.train.SummaryWriter( args.logdir + '/train', sess.graph )
 validation_summary_writer = tf.train.SummaryWriter( args.logdir + '/validation', sess.graph )
+weights_summary_writer = tf.train.SummaryWriter( args.logdir + '/weights', sess.graph )
 
-loss_summary = tf.summary.scalar( 'loss', loss )
 merged = tf.summary.merge_all()
+
+saver = tf.train.Saver()
 
 for epoch in range(100000):
   for batch in batch_process( images[:6000], features[:6000] ):
@@ -159,4 +165,6 @@ for epoch in range(100000):
 
   train_summary_writer.add_summary( tf.Summary(value=[tf.Summary.Value(tag="loss", simple_value=training_loss)]) )
   validation_summary_writer.add_summary( tf.Summary(value=[tf.Summary.Value(tag="loss", simple_value=validation_loss)]) )
+  weights_summary_writer.add_summary( sess.run( merged ) )
   print( "Train=", training_loss, "Validation=", validation_loss, "Overfitting=", training_loss/validation_loss )
+  saver.save( sess, args.checkpointfile )
