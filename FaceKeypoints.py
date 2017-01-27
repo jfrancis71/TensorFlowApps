@@ -55,8 +55,18 @@ def model2():
 
   return loss
 
+#def weight_variable(shape):
+#  if len(shape) == 4:
+#    initial = tf.truncated_normal(shape, stddev=np.sqrt(2)/np.sqrt(shape[0]*shape[1]*shape[2]))
+#  else:
+#    initial = tf.truncated_normal(shape, stddev=np.sqrt(2)/np.sqrt(shape[0]*shape[1]))
+#  return tf.Variable(initial)
+
 def weight_variable(shape):
-  initial = tf.truncated_normal(shape, stddev=0.1)
+  if len(shape) == 4:
+    initial = tf.random_uniform(shape, -np.sqrt( 12 / ( shape[0]*shape[1]*shape[2] + shape[3]) ), np.sqrt( 12 / ( shape[0]*shape[1]*shape[2] + shape[3] ) ) )
+  else:
+    initial = tf.random_uniform(shape, -np.sqrt( 12 / ( shape[0] + shape[1] ) ), np.sqrt( 12 / ( shape[0] + shape[1] ) ) )
   return tf.Variable(initial)
 
 def bias_variable(shape):
@@ -71,9 +81,9 @@ def max_pool_2x2(x):
                         strides=[1, 2, 2, 1], padding='SAME')
 
 #More powerful convolutional model
-#Validation = Train= 0.000327785217824 Validation= 0.000376207323065 Overfitting= 0.871288775438
+#Train= 0.00256484711135 Validation= 0.00386843005996 Overfitting= 0.663020158462
 def model3():
-  x_image = (tf.reshape(x, [-1,96,96,1])-48)/48
+  x_image = tf.reshape(x, [-1,96,96,1])/255
   yt = (y_ - 48)/48
 
   W_conv1 = weight_variable([3, 3, 1, 32])
@@ -122,7 +132,7 @@ def batch_run( inputs, targets ):
   total_loss = 0
   for batch in batch_process( inputs, targets ):
     batch_loss = sess.run( loss, feed_dict = { x: batch[0], y_: batch[1] } )
-    total_loss += batch_loss * len( batch )
+    total_loss += batch_loss * len( batch[0] )
   return total_loss / len( targets )
 
 #Parsing the command line arguments
@@ -142,7 +152,7 @@ x = tf.placeholder(tf.float32, [None, 96, 96])
 y_ = tf.placeholder( tf.float32, shape=[None,4 ] )
 
 loss = model3()
-train_step = tf.train.MomentumOptimizer( learning_rate=0.0001, use_nesterov=True, momentum=0.9 ).minimize( loss )
+train_step = tf.train.MomentumOptimizer( learning_rate=0.001, use_nesterov=True, momentum=0.9 ).minimize( loss )
 
 gpu_options = tf.GPUOptions( per_process_gpu_memory_fraction=0.4 )
 sess = tf.Session( config=tf.ConfigProto( gpu_options = gpu_options, device_count = {'GPU':-1} ) )
