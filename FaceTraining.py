@@ -36,15 +36,15 @@ def max_pool_2x2(x):
   return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
-def model( l3 ):
+def model( l1, l3 ):
   x_image = tf.reshape(x, [-1,32,32,1])
 
-  W_conv1 = weight_variable([5, 5, 1, 32])
-  b_conv1 = bias_variable([32])
+  W_conv1 = weight_variable([5, 5, 1, l1])
+  b_conv1 = bias_variable([l1])
   h_conv1 = tf.nn.tanh(conv2d(x_image, W_conv1) + b_conv1)
   h_pool1 = max_pool_2x2(h_conv1)
 
-  W_conv2 = weight_variable([5, 5, 32, 32])
+  W_conv2 = weight_variable([5, 5, l1, 32])
   b_conv2 = bias_variable([32])
   h_conv2 = tf.nn.tanh(conv2d(h_pool1, W_conv2) + b_conv2)
   h_pool2 = max_pool_2x2(h_conv2)
@@ -105,8 +105,8 @@ training_labels = labels[:training_size]
 validation_images = images[training_size:]
 validation_labels = labels[training_size:]
 
-def train_model( l3 ):
-  loss = model( l3 )
+def train_model( l1 = 32, l3  = 64 ):
+  loss = model( l1, l3 )
   train_step = tf.train.MomentumOptimizer( learning_rate=0.01, use_nesterov=True, momentum=0.9 ).minimize( loss )
   gpu_options = tf.GPUOptions( per_process_gpu_memory_fraction=0.4 )
   sess = tf.Session( config=tf.ConfigProto( gpu_options = gpu_options, device_count = {'GPU':-1} ) )
@@ -124,7 +124,7 @@ def train_model( l3 ):
   return( validation_loss )
 
 res = []
-for l3 in range(1,64):
-  res.append( train_model( l3 ) )
+for l1 in range(1,64):
+  res.append( train_model( l1=l1, l3=64 ) )
 
 print( res )
