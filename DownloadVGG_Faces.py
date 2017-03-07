@@ -29,8 +29,6 @@ def retrieve_celeb( filename ):
       pts.append( pt )
     except IOError as e:
       continue
-    if ( len( pts ) > 10):
-      break
   return pts
 
 #Parsing the command line arguments
