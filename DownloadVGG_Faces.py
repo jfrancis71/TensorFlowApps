@@ -37,14 +37,14 @@ parser.add_argument("-folder",
                     help="folder for the HDF5 file and subfolder files")
 args = parser.parse_args()
 
-content_list = os.listdir(args.folder + "/files/")
+content_list = os.listdir( os.path.join( args.folder, "files") )
 
 celebs = []
-for celeb in content_list[0:4]:
+for celeb in content_list[0:100]:
   print( "Celeb", celeb )
-  pts = retrieve_celeb( args.folder + "/files/" + celeb )
+  pts = retrieve_celeb( os.path.join( args.folder, "files", celeb ) )
   celebs = celebs + pts
 
-file = h5py.File( args.folder + "/dataset.hdf5", 'w')
+file = h5py.File( os.path.join( args.folder, "dataset.hdf5" ), 'w')
 dset = file.create_dataset("/patches", data = celebs )
 file.close()
