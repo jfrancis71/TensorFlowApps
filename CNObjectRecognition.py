@@ -1,8 +1,6 @@
 #
-# V Simple program for UK style electrical socket recognition
+# V Simple program for object recognition
 # Requires pre trained neural net weight files in current dir in JSON format
-# Usage: python SocketRecognition.py cam
-# Usage: python SocketRecognition.py image.jpg            where image must be 240*320
 
 
 import tensorflow as tf
@@ -89,18 +87,18 @@ def max_pool_2x2(x):
   return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
-def buildObjectRecognitionGraph( x_image, modelFilename ):
+def buildObjectRecognitionGraph( tfImage, modelFilename ):
 
     modelNet = CNReadNN( modelFilename )
 
-    h_conv1 = tf.nn.tanh( conv2d(x_image, CNConv2DWeights( modelNet[0] ) ) )
+    h_conv1 = tf.nn.tanh( conv2d( tfImage, CNConv2DWeights( modelNet[0] ) ) )
     h_pool1 = max_pool_2x2(h_conv1)
 
-    h_conv2 = tf.nn.tanh( conv2d(h_pool1, CNConv2DWeights( modelNet[1] ) ) )
+    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CNConv2DWeights( modelNet[1] ) ) )
     h_pool2 = max_pool_2x2(h_conv2)
 
-    h_conv3 = tf.nn.tanh( conv2d(h_pool2, CNConv2DWeights( modelNet[2] ) ) )
+    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CNConv2DWeights( modelNet[2] ) ) )
 
-    h_conv4 = tf.nn.sigmoid( conv2d(h_conv3, CNConv2DWeights( modelNet[3] ) ) )
+    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CNConv2DWeights( modelNet[3] ) ) )
 
     return ( h_conv4 )
