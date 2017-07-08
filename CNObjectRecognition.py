@@ -55,6 +55,15 @@ def CNObjectLocalization( pilImage, label_image, sess, tfGraphs, colorF, thresho
     label_image.pack(side = tkinter.TOP, expand=True, fill=tkinter.BOTH)
     label_image.create_image( 120,160, image=tkImage )
 
+    objs = CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold )
+
+    for obj in objs:
+        label_image.create_rectangle( obj[0], obj[1], obj[2], obj[3], outline=obj[4], width=3 )
+
+    print( "Time lapsed=", time.clock() - start )
+
+def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997 ):
+
     images = buildImagePyramid( pilImage )
 
     npImages = []
@@ -72,14 +81,16 @@ def CNObjectLocalization( pilImage, label_image, sess, tfGraphs, colorF, thresho
 
     outputPyramid = sess.run( tfOutputs, feed_dict = fd )
 
-    for s in range( len( images ) ):
+    objRet = []
+    for s in range( len( outputPyramid ) ):
         objs = extractObjects( outputPyramid[s], threshold )
         scale = pilImage.width / images[s].width
         for obj in objs:
             col = colorF( npImages[s][obj[1]:obj[1]+32,obj[0]:obj[0]+32] )
-            label_image.create_rectangle( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16), outline=col, width=3 )
+            objRet.append( ( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16), col ) )
 
-    print( "Time lapsed=", time.clock() - start )
+    return objRet
+
 
 #Private Code
 
