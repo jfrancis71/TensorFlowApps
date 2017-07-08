@@ -12,7 +12,6 @@ from PIL import Image
 from PIL import ImageTk
 from PIL import ImageDraw
 import tkinter
-import numpy as np
 import json
 import time
 import sys
