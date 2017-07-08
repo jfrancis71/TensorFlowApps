@@ -49,13 +49,9 @@ def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997
 
     npImages = [ np.array( image ) / 255.0 for image in images ]
 
-    tfOutputs = []
-    tfImages = []
-    for s in range( len( images ) ):
-        tfOutputs.append( tfGraphs[s][1] )
-        tfImages.append( [ np.array( [ npImages[s] ] ).transpose( (1,2,0) ) ] )
+    tfOutputs = [ graph[1] for graph in tfGraphs ]
 
-    fd = { tfGraphs[s][0] : tfImages[s] for s in range( len( tfImages ) ) }
+    fd = { tfGraphs[s][0] : [ np.array( [ npImages[s] ] ).transpose( 1,2,0 ) ] for s in range( len( images ) ) }
 
     outputPyramid = sess.run( tfOutputs, feed_dict = fd )
 
