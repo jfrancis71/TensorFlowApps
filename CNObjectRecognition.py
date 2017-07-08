@@ -47,10 +47,7 @@ def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997
 
     images = buildImagePyramid( pilImage )
 
-    npImages = []
-    for s in range( len( images ) ):
-        npImage = np.array( images[s] ) / 255.0
-        npImages.append( npImage )
+    npImages = [ np.array( image ) / 255.0 for image in images ]
 
     tfOutputs = []
     tfImages = []
