@@ -61,12 +61,28 @@ def processImage():
 
     pilImage = img.convert( 'L' )
 
-    CNObjectRecognition.CNObjectLocalization( pilImage, label_image, sess, global_graph, colorF, threshold )
+    CNObjectLocalization( pilImage, label_image, sess, global_graphs, colorF, threshold )
 
 def eventLoop():
     processImage()
     if ( fileSource == "cam" ):
        root.after( 100, eventLoop )
+
+#Takes a pilImage, builds an image pyramid and applies the tfGraphs to each level
+#of the image pyramid and writes the graphics output into label_image, a TkImage object.
+def CNObjectLocalization( pilImage, label_image, sess, tfGraphs, colorF, threshold=0.997 ):
+    start= time.clock()
+    tkImage = ImageTk.PhotoImage( pilImage )
+    label_image.img = tkImage
+    label_image.pack(side = tkinter.TOP, expand=True, fill=tkinter.BOTH)
+    label_image.create_image( 120,160, image=tkImage )
+
+    objs = CNObjectRecognition.CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold )
+
+    for obj in objs:
+        label_image.create_rectangle( obj[0], obj[1], obj[2], obj[3], outline=obj[4], width=3 )
+
+    print( "Time lapsed=", time.clock() - start )
 
 def initialize_genderNet():
     genderNet = CNObjectRecognition.CNReadNN( genderNetFilename )
@@ -99,16 +115,6 @@ def initialize_genderNet():
 
     return( gx_image, gfc4, h_flat4 )
 
-def initialize():
-    initImgs = CNObjectRecognition.buildImagePyramid( Image.new( 'L', (240,320), 0 ) )
-    gl = []
-    for s in range( len(initImgs) ):
-        x_image = tf.placeholder( tf.float32, shape=[ 1, initImgs[s].height, initImgs[s].width, 1 ] )
-        gr1 = CNObjectRecognition.buildObjectRecognitionGraph( x_image, modelFilename )
-        gl.append( (x_image, gr1 ) )
-
-    return gl
-
 parser = argparse.ArgumentParser()
 
 parser.add_argument("-image",
@@ -140,7 +146,7 @@ label_image = tkinter.Canvas( root )
 
 sess = tf.Session()
 
-global_graph = initialize()
+global_graphs = CNObjectRecognition.buildObjectRecognitionGraphs( modelFilename, 240, 320 )
 
 sess.run(tf.global_variables_initializer())
 

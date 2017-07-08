@@ -24,44 +24,25 @@ import requests
 
 #Public Interfaces
 
-#Takes a TensorFlow image array and builds a TensorFlow graph to process
-#that image using the model parameters specified in modelFilename.
-def buildObjectRecognitionGraph( tfImage, modelFilename ):
+#This returns a list of tuples, where first item in tuple is the image placeholder
+#and the second item in the tuple is a tensorflow tensor of probabilities indicating
+#presence of object
+def buildObjectRecognitionGraphs( modelFilename, width, height ):
 
-    modelNet = CNReadNN( modelFilename )
+    modelParameters = CNReadNN( modelFilename )
 
-    h_conv1 = tf.nn.tanh( conv2d( tfImage, CNConv2DWeights( modelNet[0] ) ) )
-    h_pool1 = max_pool_2x2(h_conv1)
+    initImgs = buildImagePyramid( Image.new( 'L', (width,height), 0 ) )
+    gl = []
+    for s in range( len(initImgs) ):
+        x_image = tf.placeholder( tf.float32, shape=[ 1, initImgs[s].height, initImgs[s].width, 1 ] )
+        gr1 = buildObjectRecognitionGraph( x_image, modelParameters )
+        gl.append( (x_image, gr1 ) )
 
-    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CNConv2DWeights( modelNet[1] ) ) )
-    h_pool2 = max_pool_2x2(h_conv2)
-
-    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CNConv2DWeights( modelNet[2] ) ) )
-
-    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CNConv2DWeights( modelNet[3] ) ) )
-
-    return ( h_conv4 )
+    return gl
 
 #Note the conceptual difference with the CognitoZoo Mathematica implementation.
 #Here we are making a single TensorFlow call to process all images at different scale.
 #whereas MXNet implementation makes one call per image scale.
-
-#Takes a pilImage, builds an image pyramid and applies the tfGraphs to each level
-#of the image pyramid and writes the graphics output into label_image, a TkImage object.
-def CNObjectLocalization( pilImage, label_image, sess, tfGraphs, colorF, threshold=0.997 ):
-    start= time.clock()
-    tkImage = ImageTk.PhotoImage( pilImage )
-    label_image.img = tkImage
-    label_image.pack(side = tkinter.TOP, expand=True, fill=tkinter.BOTH)
-    label_image.create_image( 120,160, image=tkImage )
-
-    objs = CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold )
-
-    for obj in objs:
-        label_image.create_rectangle( obj[0], obj[1], obj[2], obj[3], outline=obj[4], width=3 )
-
-    print( "Time lapsed=", time.clock() - start )
-
 def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997 ):
 
     images = buildImagePyramid( pilImage )
@@ -93,6 +74,22 @@ def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997
 
 
 #Private Code
+
+#Takes a TensorFlow image array and builds a TensorFlow graph to process
+#that image using the model parameters specified in modelFilename.
+def buildObjectRecognitionGraph( tfImage, modelParameters ):
+
+    h_conv1 = tf.nn.tanh( conv2d( tfImage, CNConv2DWeights( modelParameters[0] ) ) )
+    h_pool1 = max_pool_2x2(h_conv1)
+
+    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CNConv2DWeights( modelParameters[1] ) ) )
+    h_pool2 = max_pool_2x2(h_conv2)
+
+    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CNConv2DWeights( modelParameters[2] ) ) )
+
+    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CNConv2DWeights( modelParameters[3] ) ) )
+
+    return ( h_conv4 )
 
 def extractObjects( outputMap, threshold ):
     extractPositions = np.transpose( np.nonzero( outputMap[0][:,:,0] > threshold ) )
