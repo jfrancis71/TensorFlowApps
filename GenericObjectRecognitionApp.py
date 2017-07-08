@@ -2,6 +2,7 @@
 # Requires pre trained neural net weight files in JSON format
 
 import tensorflow as tf
+import numpy as np
 
 import urllib
 import io
@@ -18,26 +19,21 @@ import urllib.request as ur
 import urllib.request
 from io import BytesIO
 import requests
-
-import numpy as nd
-
 import argparse
 
 import CNObjectRecognition
 
+#Example command line:
+#python3 GenericObjectRecognitionApp.py -model ~/Google\ Drive/Personal/Computer\ Science/WebMonitor/sockets/net.json -image cam -station 4 -threshold .99
 
 def blend( x, c1, c2 ):
     return x*c2 + (1-x)*c1
-
 
 def colorF( patch ):
 
     if ( genderNetFilename is None ):
         return 'green'
 
-    print( patch.shape )
-    if ( patch.shape != (32,32) ):
-        return "#FFFFFF"
     tfImage = [ nd.array( [ patch ] ).transpose( (1,2,0) ) ]
     score = sess.run( genderResult, feed_dict = { x_genderImage : tfImage } )[0][0]
     print( "gender score: ", score )
@@ -51,12 +47,6 @@ def colorF( patch ):
     bld = blend( score, c1, c2 )
 
     col = "#%02x%02x%02x"%( (int)(bld[0]), (int)(bld[1]), (int)(bld[2]) )
-
-    with open('tp.json', 'w') as outfile:
-         json.dump(sess.run( save, feed_dict = { x_genderImage : tfImage }  ).tolist(), outfile)
-
-    with open('ptch.json', 'w') as outfile:
-        json.dump( patch.tolist(), outfile )
 
     return col
 
@@ -86,7 +76,6 @@ def initialize_genderNet():
     paddings = [ [0, 0], [2, 2], [2, 2], [0, 0] ]
     gh_pad1 = tf.pad(gx_image, paddings, "CONSTANT")
     gh_conv1 = tf.nn.tanh( CNObjectRecognition.conv2d( gh_pad1, CNObjectRecognition.CNConv2DWeights( genderNet[0] ) ) )
-    #gh_pool1 = max_pool_2x2(gh_conv1)
     gh_pool1 = tf.nn.max_pool(gh_conv1, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
@@ -98,7 +87,6 @@ def initialize_genderNet():
 
     gh_pad3 = tf.pad( gh_pool2, paddings, "CONSTANT")
     gh_conv3 = tf.nn.tanh( CNObjectRecognition.conv2d( gh_pad3, CNObjectRecognition.CNConv2DWeights( genderNet[2] ) ) )
-    #gh_pool3 = max_pool_2x2( gh_conv3 )
     gh_pool3 = tf.nn.max_pool(gh_conv3, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
@@ -127,7 +115,7 @@ parser.add_argument("-image",
                     help="jpg file containing image for recognition")
 parser.add_argument("-model",
                     help="JSON file with model weights")
-parser.add_argument("-threshold", type=float,
+parser.add_argument("-threshold", type=float, default=.99,
                     help="threshold for output detection")
 parser.add_argument("-station",
                     help="station number for webcam")
