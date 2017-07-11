@@ -39,10 +39,12 @@ def CZBuildObjectRecognitionGraphs( modelFilename, width, height ):
 
     return gl
 
+CZFaceDetectSession = tf.Session()
+
 #Note the conceptual difference with the CognitoZoo Mathematica implementation.
 #Here we are making a single TensorFlow call to process all images at different scale.
 #whereas MXNet implementation makes one call per image scale.
-def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997 ):
+def CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold=0.997 ):
 
     images = buildImagePyramid( pilImage.convert( 'L' ) )
 
@@ -52,7 +54,7 @@ def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997
 
     fd = { tfGraphs[s][0] : [ np.array( [ npImages[s] ] ).transpose( 1,2,0 ) ] for s in range( len( images ) ) }
 
-    outputPyramid = sess.run( tfOutputs, feed_dict = fd )
+    outputPyramid = CZFaceDetectSession.run( tfOutputs, feed_dict = fd )
 
     objRet = []
     for s in range( len( outputPyramid ) ):
@@ -62,7 +64,6 @@ def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997
             objRet.append( ( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16) ) )
 
     return objRet
-
 
 #Private Code
 
