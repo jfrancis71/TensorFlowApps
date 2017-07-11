@@ -2,24 +2,20 @@
 # V Simple program for object recognition
 # Requires pre trained neural net weight files in current dir in JSON format
 
+#Example Usage:
+#global_graphs = cnor.CZBuildObjectRecognitionGraphs( '/Users/julian/FaceNet.json', 240, 320 )
+#output = cnor.CZHighlightImage( img, cnor.CZMultiScaleDetectObjects( img, global_graphs ) )
+
 
 import tensorflow as tf
 import numpy as np
 
-import urllib
-import io
 from PIL import Image
-from PIL import ImageTk
 from PIL import ImageDraw
-import tkinter
 import json
 import time
 import sys
 import math
-import urllib.request as ur
-import urllib.request
-from io import BytesIO
-import requests
 
 #Public Interfaces
 
@@ -64,6 +60,18 @@ def CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold=0.997 ):
             objRet.append( ( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16) ) )
 
     return objRet
+
+def CZHighlightImage( pilImage, rectangles ):
+    img = pilImage.copy()
+    draw = ImageDraw.Draw( img )
+    draw.rectangle
+    for obj in rectangles:
+        draw.rectangle( [ obj[0], obj[1], obj[2], obj[3] ], outline = 'green' )
+        draw.rectangle( [ obj[0]-1, obj[1]-1, obj[2]+1, obj[3]+1 ], outline = 'green' )
+        draw.rectangle( [ obj[0]-2, obj[1]-2, obj[2]+2, obj[3]+2 ], outline = 'green' )
+
+    return img
+
 
 #Private Code
 
