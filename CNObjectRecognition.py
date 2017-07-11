@@ -1,4 +1,3 @@
-#
 # V Simple program for object recognition
 # Requires pre trained neural net weight files in current dir in JSON format
 
@@ -65,25 +64,88 @@ def CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold=0.997 ):
     objRet = []
     for s in range( len( outputPyramid ) ):
         objs = extractObjects( outputPyramid[s], threshold )
+
+        extractPositions = np.transpose( np.nonzero( outputPyramid[s][0][:,:,0] > threshold ) )
+        objs = list( map( lambda x: (outputPyramid[s][0][:,:,0][x[0],x[1]],x[1]*4,x[0]*4), extractPositions ) )
+
         scale = pilImage.width / images[s].width
         for obj in objs:
-            objRet.append( ( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16) ) )
+            objRet.append( ( obj[0], ( scale*(16 + obj[1]-16), scale*(16 + obj[2]-16) ), ( scale*(16 + obj[1]+16), scale*(16 + obj[2]+16) ) ) )
 
     return objRet
+
+def CZDetectFaces( pilImage, tfGraphs, threshold=0.997 ):
+    return CZDeleteOverlappingWindows( CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold ) )
 
 def CZHighlightImage( pilImage, rectangles ):
     img = pilImage.copy()
     draw = ImageDraw.Draw( img )
     draw.rectangle
     for obj in rectangles:
-        draw.rectangle( [ obj[0], obj[1], obj[2], obj[3] ], outline = 'green' )
-        draw.rectangle( [ obj[0]-1, obj[1]-1, obj[2]+1, obj[3]+1 ], outline = 'green' )
-        draw.rectangle( [ obj[0]-2, obj[1]-2, obj[2]+2, obj[3]+2 ], outline = 'green' )
+        draw.rectangle( [ obj[0][0], obj[0][1], obj[1][0], obj[1][1] ], outline = 'green' )
+        draw.rectangle( [ obj[0][0]-1, obj[0][1]-1, obj[1][0]+1, obj[1][1]+1 ], outline = 'green' )
+        draw.rectangle( [ obj[0][0]-2, obj[0][1]-2, obj[1][0]+2, obj[1][1]+2 ], outline = 'green' )
+
+    return img
+
+def CZGender( pilImage ):
+    norm = pilImage.convert( 'L' ).resize( ( 32, 32 ) )
+    tfImage = [ np.array( [ np.array( norm ) ] ).transpose( (1,2,0) ) / 255. ]
+    return CZFaceDetectSession.run( CZGenderNet[1], feed_dict = { CZGenderNet[0] : tfImage } )[0][0]
+
+def CZHighlightFaces( pilImage, tfGraphs, threshold = .997 ):
+    objs = CZDetectFaces( pilImage, tfGraphs, threshold )
+    img = pilImage.copy()
+
+    draw = ImageDraw.Draw( img )
+    draw.rectangle
+    for obj in objs:
+        crp = pilImage.crop( ( obj[0][0], obj[0][1], obj[1][0], obj[1][1] ) )
+        gender = CZGender( crp )
+        c1 = np.array( [ 255., 105., 180. ] )
+        c2 = np.array( [ 0., 0., 255. ] )
+        bld = blend( gender, c1, c2 )
+        color = "#%02x%02x%02x"%( (int)(bld[0]), (int)(bld[1]), (int)(bld[2]) )
+        draw.rectangle( [ obj[0][0], obj[0][1], obj[1][0], obj[1][1] ], outline = color )
+        draw.rectangle( [ obj[0][0]-1, obj[0][1]-1, obj[1][0]+1, obj[1][1]+1 ], outline = color )
+        draw.rectangle( [ obj[0][0]-2, obj[0][1]-2, obj[1][0]+2, obj[1][1]+2 ], outline = color )
 
     return img
 
 
 #Private Code
+
+def CZIntersection( a, b ):
+    xa=max(a[0][0],b[0][0])
+    ya=max(a[0][1],b[0][1])
+    xb=min(a[1][0],b[1][0])
+    yb=min(a[1][1],b[1][1]),
+    if ( xa>xb or ya>yb ):
+        ans = 0
+    else:
+        ans = (xb-xa+1)*(yb-ya+1) 
+    return ans
+
+def CZArea( a ):
+    return ( a[0][0]-a[1][0] ) * ( a[0][1]-a[1][1] )
+
+def CZUnion( a, b ):
+    return CZArea( a ) + CZArea( b ) - CZIntersection( a, b )
+
+def CZIntersectionOverUnion(a, b):
+    return CZIntersection( a, b ) / CZUnion( a, b  ) 
+
+def CZDeleteOverlappingWindows( objects ):
+    filtered = []
+    for a in objects:
+        idel = 0
+        for b in objects:
+            if ( CZIntersectionOverUnion( a[1:3], b[1:3] ) > .25 and a[0] < b[0] ):
+                idel = 1
+        if ( idel == 0 ):
+            filtered.append( a[1:3] )
+
+    return filtered
 
 #Takes a TensorFlow image array and builds a TensorFlow graph to process
 #that image using the model parameters specified in modelFilename.
@@ -127,3 +189,41 @@ def conv2d(x, w):
 def max_pool_2x2(x):
   return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
+
+CZGenderNetFilename = os.path.join(os.path.expanduser('~'), 'GenderNet.json' )
+
+def CZBuildGenderRecognitionGraph():
+    genderNetParameters = CZReadNN( CZGenderNetFilename )
+
+    gx_image = tf.placeholder( tf.float32, shape=[ 1, 32, 32, 1 ] )
+
+    paddings = [ [0, 0], [2, 2], [2, 2], [0, 0] ]
+    gh_pad1 = tf.pad(gx_image, paddings, "CONSTANT")
+    gh_conv1 = tf.nn.tanh( conv2d( gh_pad1, CNConv2DWeights( genderNetParameters[0] ) ) )
+    gh_pool1 = tf.nn.max_pool(gh_conv1, ksize=[1, 2, 2, 1],
+                        strides=[1, 2, 2, 1], padding='SAME')
+
+    gh_pad2 = tf.pad( gh_pool1, paddings, "CONSTANT")
+    gh_conv2 = tf.nn.tanh( conv2d( gh_pad2, CNConv2DWeights( genderNetParameters[1] ) ) )
+    #gh_pool2 = max_pool_2x2( gh_conv2 )
+    gh_pool2 = tf.nn.max_pool(gh_conv2, ksize=[1, 2, 2, 1],
+                        strides=[1, 2, 2, 1], padding='SAME')
+
+    gh_pad3 = tf.pad( gh_pool2, paddings, "CONSTANT")
+    gh_conv3 = tf.nn.tanh( conv2d( gh_pad3, CNConv2DWeights( genderNetParameters[2] ) ) )
+    gh_pool3 = tf.nn.max_pool(gh_conv3, ksize=[1, 2, 2, 1],
+                        strides=[1, 2, 2, 1], padding='SAME')
+
+    h_reshape4 = tf.transpose( gh_pool3, perm=[ 0, 3, 1, 2 ] )
+
+    h_flat4 = tf.reshape(h_reshape4, [-1,1024])
+
+    gfc4 = tf.nn.sigmoid(tf.matmul(h_flat4, genderNetParameters[3][1] ) + genderNetParameters[3][0] )
+
+    return( gx_image, gfc4 )
+
+CZGenderNet = CZBuildGenderRecognitionGraph()
+
+def blend( x, c1, c2 ):
+    return x*c2 + (1-x)*c1
+
