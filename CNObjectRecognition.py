@@ -26,7 +26,7 @@ import requests
 #This returns a list of tuples, where first item in tuple is the image placeholder
 #and the second item in the tuple is a tensorflow tensor of probabilities indicating
 #presence of object
-def buildObjectRecognitionGraphs( modelFilename, width, height ):
+def CZBuildObjectRecognitionGraphs( modelFilename, width, height ):
 
     modelParameters = CNReadNN( modelFilename )
 
@@ -44,7 +44,7 @@ def buildObjectRecognitionGraphs( modelFilename, width, height ):
 #whereas MXNet implementation makes one call per image scale.
 def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997 ):
 
-    images = buildImagePyramid( pilImage )
+    images = buildImagePyramid( pilImage.convert( 'L' ) )
 
     npImages = [ np.array( image ) / 255.0 for image in images ]
 
@@ -59,8 +59,7 @@ def CZMultiScaleDetectObjects( pilImage, sess, tfGraphs, colorF, threshold=0.997
         objs = extractObjects( outputPyramid[s], threshold )
         scale = pilImage.width / images[s].width
         for obj in objs:
-            col = colorF( npImages[s][obj[1]:obj[1]+32,obj[0]:obj[0]+32] )
-            objRet.append( ( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16), col ) )
+            objRet.append( ( scale*(16 + obj[0]-16), scale*(16 + obj[1]-16), scale*(16 + obj[0]+16), scale*(16 + obj[1]+16) ) )
 
     return objRet
 
