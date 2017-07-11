@@ -3,7 +3,7 @@
 # Requires pre trained neural net weight files in current dir in JSON format
 
 #Example Usage:
-#global_graphs = cnor.CZBuildObjectRecognitionGraphs( '/Users/julian/FaceNet.json', 240, 320 )
+#global_graphs = cnor.CZBuildFaceRecognitionGraphs( 240, 320 )
 #output = cnor.CZHighlightImage( img, cnor.CZMultiScaleDetectObjects( img, global_graphs ) )
 
 
@@ -16,24 +16,34 @@ import json
 import time
 import sys
 import math
+import os
 
 #Public Interfaces
+
+def CZReadNN( fileName ):
+    with open( fileName, 'r' ) as infile:
+       j = json.load( infile )
+    return j
+
+CZFaceNetParameters = CZReadNN( os.path.join(os.path.expanduser('~'), 'FaceNet.json' ) )
 
 #This returns a list of tuples, where first item in tuple is the image placeholder
 #and the second item in the tuple is a tensorflow tensor of probabilities indicating
 #presence of object
-def CZBuildObjectRecognitionGraphs( modelFilename, width, height ):
-
-    modelParameters = CNReadNN( modelFilename )
+def CZBuildObjectRecognitionGraphs( parameters, width, height ):
 
     initImgs = buildImagePyramid( Image.new( 'L', (width,height), 0 ) )
     gl = []
     for s in range( len(initImgs) ):
         x_image = tf.placeholder( tf.float32, shape=[ 1, initImgs[s].height, initImgs[s].width, 1 ] )
-        gr1 = buildObjectRecognitionGraph( x_image, modelParameters )
+        gr1 = buildObjectRecognitionGraph( x_image, parameters )
         gl.append( (x_image, gr1 ) )
 
     return gl
+
+
+def CZBuildFaceRecognitionGraphs( width, height ):
+    return CZBuildObjectRecognitionGraphs( CZFaceNetParameters, width, height )
 
 CZFaceDetectSession = tf.Session()
 
@@ -98,11 +108,6 @@ def extractObjects( outputMap, threshold ):
 
 def CNConv2DWeights( layer ):
     return ( layer[0], layer[1] )
-
-def CNReadNN( fileName ):
-    with open( fileName, 'r' ) as infile:
-       j = json.load( infile )
-    return j
 
 #Takes an image as an argument and returns a pyramid of images
 #ie list of images of decreasing sizes
