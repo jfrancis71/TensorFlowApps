@@ -19,11 +19,8 @@
 
 #Public Interfaces
 
-def CZBuildFaceRecognitionGraphs( width, height ):
-    return CZBuildObjectRecognitionGraphs( CZFaceNetParameters, width, height )
-
-def CZDetectFaces( pilImage, tfGraphs, threshold=0.997 ):
-    return CZDeleteOverlappingWindows( CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold ) )
+def CZDetectFaces( pilImage, threshold=0.997 ):
+    return CZDeleteOverlappingWindows( CZMultiScaleDetectObjects( pilImage, CZFaceNet, threshold ) )
 
 def CZHighlightImage( pilImage, rectangles ):
     img = pilImage.copy()
@@ -41,8 +38,8 @@ def CZGender( pilImage ):
     tfImage = [ np.array( [ np.array( norm ) ] ).transpose( (1,2,0) ) / 255. ]
     return CZFaceDetectSession.run( CZGenderNet[1], feed_dict = { CZGenderNet[0] : tfImage } )[0][0]
 
-def CZHighlightFaces( pilImage, tfGraphs, threshold = .997 ):
-    objs = CZDetectFaces( pilImage, tfGraphs, threshold )
+def CZHighlightFaces( pilImage, threshold = .997 ):
+    objs = CZDetectFaces( pilImage, threshold )
     img = pilImage.copy()
 
     draw = ImageDraw.Draw( img )
@@ -82,74 +79,67 @@ CZFaceNetParameters = CZReadNN( os.path.join(os.path.expanduser('~'), 'FaceNet.j
 
 #Takes a TensorFlow image array and builds a TensorFlow graph to process
 #that image using the model parameters specified in modelFilename.
-def buildObjectRecognitionGraph( tfImage, modelParameters ):
+def buildObjectRecognitionGraph():
 
-    h_conv1 = tf.nn.tanh( conv2d( tfImage, CNConv2DWeights( modelParameters[0] ) ) )
+    x_image = tf.placeholder( tf.float32, shape=[ 1, None, None, 1 ] )
+
+    h_conv1 = tf.nn.tanh( conv2d( x_image, CNConv2DWeights( CZFaceNetParameters[0] ) ) )
     h_pool1 = max_pool_2x2(h_conv1)
 
-    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CNConv2DWeights( modelParameters[1] ) ) )
+    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CNConv2DWeights( CZFaceNetParameters[1] ) ) )
     h_pool2 = max_pool_2x2(h_conv2)
 
-    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CNConv2DWeights( modelParameters[2] ) ) )
+    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CNConv2DWeights( CZFaceNetParameters[2] ) ) )
 
-    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CNConv2DWeights( modelParameters[3] ) ) )
+    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CNConv2DWeights( CZFaceNetParameters[3] ) ) )
 
-    return ( h_conv4 )
+    return ( x_image, h_conv4 )
 
-
-def extractObjects( outputMap, threshold ):
-    extractPositions = np.transpose( np.nonzero( outputMap[0][:,:,0] > threshold ) )
-    origCoords = list( map( lambda x: (x[1]*4,x[0]*4), extractPositions ) )
-    return origCoords
+#   Note the first part of w is the biases, the second is the weights
+def conv2d(x, w):
+  return w[0] + tf.nn.conv2d(x, w[1], strides=[1, 1, 1, 1], padding='VALID')
 
 def CNConv2DWeights( layer ):
     return ( layer[0], layer[1] )
 
-#Takes an image as an argument and returns a pyramid of images
+def max_pool_2x2(x):
+  return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
+                        strides=[1, 2, 2, 1], padding='SAME')
 
-#This returns a list of tuples, where first item in tuple is the image placeholder
-#and the second item in the tuple is a tensorflow tensor of probabilities indicating
-#presence of object
-def CZBuildObjectRecognitionGraphs( parameters, width, height ):
-
-    initImgs = buildImagePyramid( Image.new( 'L', (width,height), 0 ) )
-    gl = []
-    for s in range( len(initImgs) ):
-        x_image = tf.placeholder( tf.float32, shape=[ 1, initImgs[s].height, initImgs[s].width, 1 ] )
-        gr1 = buildObjectRecognitionGraph( x_image, parameters )
-        gl.append( (x_image, gr1 ) )
-
-    return gl
-
+CZFaceNet = buildObjectRecognitionGraph()
 CZFaceDetectSession = tf.Session()
 
-#Note the conceptual difference with the CognitoZoo Mathematica implementation.
-#Here we are making a single TensorFlow call to process all images at different scale.
-#whereas MXNet implementation makes one call per image scale.
-def CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold=0.997 ):
+
+def CZMultiScaleDetectObjects( pilImage, tfGraph, threshold=0.997 ):
 
     images = buildImagePyramid( pilImage.convert( 'L' ) )
 
     npImages = [ np.array( image ) / 255.0 for image in images ]
 
-    tfOutputs = [ graph[1] for graph in tfGraphs ]
+    fd = [  [ np.array( [ npImages[s] ] ).transpose( 1,2,0 ) ] for s in range( len( images ) ) ]
 
-    fd = { tfGraphs[s][0] : [ np.array( [ npImages[s] ] ).transpose( 1,2,0 ) ] for s in range( len( images ) ) }
-
-    outputPyramid = CZFaceDetectSession.run( tfOutputs, feed_dict = fd )
+    outputPyramid = [ CZFaceDetectSession.run( tfGraph[1], feed_dict = { tfGraph[0] : image } ) for image in fd ]
 
     objRet = []
     for s in range( len( outputPyramid ) ):
-        objs = extractObjects( outputPyramid[s], threshold )
-
         extractPositions = np.transpose( np.nonzero( outputPyramid[s][0][:,:,0] > threshold ) )
         objs = list( map( lambda x: (outputPyramid[s][0][:,:,0][x[0],x[1]],x[1]*4,x[0]*4), extractPositions ) )
-
         scale = pilImage.width / images[s].width
         for obj in objs:
             objRet.append( ( obj[0], ( scale*(16 + obj[1]-16), scale*(16 + obj[2]-16) ), ( scale*(16 + obj[1]+16), scale*(16 + obj[2]+16) ) ) )
 
     return objRet
+
+#Takes an image as an argument and returns a pyramid of images
+#ie list of images of decreasing sizes
+def buildImagePyramid( pilImage ):
+    images = []
+    for s in range( -1 + int( ( math.log( 32 ) - math.log( pilImage.width ) ) / math.log (.8 ) ) ):
+        height = pilImage.height * .8**s
+        width  = pilImage.width * .8**s
+        print( "idx = ", s, " width = ", width )
+        images.append( pilImage.resize( ( int(width), int(height) ) ) )
+    return images
 
 def CZIntersection( a, b ):
     xa=max(a[0][0],b[0][0])
@@ -182,34 +172,6 @@ def CZDeleteOverlappingWindows( objects ):
             filtered.append( a[1:3] )
 
     return filtered
-
-
-def extractObjects( outputMap, threshold ):
-    extractPositions = np.transpose( np.nonzero( outputMap[0][:,:,0] > threshold ) )
-    origCoords = list( map( lambda x: (x[1]*4,x[0]*4), extractPositions ) )
-    return origCoords
-
-def CNConv2DWeights( layer ):
-    return ( layer[0], layer[1] )
-
-#Takes an image as an argument and returns a pyramid of images
-#ie list of images of decreasing sizes
-def buildImagePyramid( pilImage ):
-    images = []
-    for s in range( -1 + int( ( math.log( 32 ) - math.log( pilImage.width ) ) / math.log (.8 ) ) ):
-        height = pilImage.height * .8**s
-        width  = pilImage.width * .8**s
-        print( "idx = ", s, " width = ", width )
-        images.append( pilImage.resize( ( int(width), int(height) ) ) )
-    return images
-
-#   Note the first part of w is the biases, the second is the weights
-def conv2d(x, w):
-  return w[0] + tf.nn.conv2d(x, w[1], strides=[1, 1, 1, 1], padding='VALID')
-
-def max_pool_2x2(x):
-  return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
-                        strides=[1, 2, 2, 1], padding='SAME')
 
 CZGenderNetFilename = os.path.join(os.path.expanduser('~'), 'GenderNet.json' )
 

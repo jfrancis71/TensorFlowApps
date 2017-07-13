@@ -26,12 +26,9 @@ import CZFaceDetection
 #Example command line:
 #python3 GenericObjectRecognitionApp.py -image cam -station 4 -threshold .99
 
-face_graphs = CZFaceDetection.CZBuildFaceRecognitionGraphs( 240, 320 )
-
 def processImage():
        img = Image.open( fileSource )
-       face_graphs = CZFaceDetection.CZBuildFaceRecognitionGraphs( img.width, img.height )
-       processedImage = CZFaceDetection.CZHighlightFaces( img, face_graphs, threshold )
+       processedImage = CZFaceDetection.CZHighlightFaces( img, threshold )
        processedImage.show()
 
 def eventLoop():
@@ -39,7 +36,7 @@ def eventLoop():
     file = BytesIO( response.content )
     img = Image.open( file )
     img = img.resize( ( 240, 320 ) )
-    tkImage = ImageTk.PhotoImage( CZFaceDetection.CZHighlightFaces( img, face_graphs, threshold ) )
+    tkImage = ImageTk.PhotoImage( CZFaceDetection.CZHighlightFaces( img, threshold ) )
     label_image.img = tkImage
     label_image.pack(side = tkinter.TOP, expand=True, fill=tkinter.BOTH)
     label_image.create_image( 120,160, image=tkImage )
