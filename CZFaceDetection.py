@@ -1,78 +1,26 @@
-# V Simple program for object recognition
-# Requires pre trained neural net weight files in current dir in JSON format
+#
+#   The weights for this model come from training in a neural network library called CognitoNet which is now retired.
+#
+#   That training session used images from the Face Scrub data set:
+#   http: http://vintage.winklerbros.net/facescrub.html
+#   H.-W. Ng, S. Winkler.
+#   A data-driven approach to cleaning large face datasets.
+#   Proc. IEEE International Conference on Image Processing (ICIP), Paris, France, Oct. 27-30, 2014.
+#
+#   Example use:
+#      global_graphs = cnor.CZBuildFaceRecognitionGraphs( 240, 320 )
+#      output = cnor.CZHighlightImage( img, cnor.CZMultiScaleDetectObjects( img, global_graphs ) )
+#
+#   You need to download the following two files and install them somewhere on youe search path.
+#   FaceNet2Convolve.json from https://drive.google.com/file/d/0Bzhe0pgVZtNUMFhfcGJwRE9sRWc/view?usp=sharing
+#   GenderNet.json from https://drive.google.com/file/d/0Bzhe0pgVZtNUaDY5ZzFiN2ZfTFU/view?usp=sharing
+#
 
-#Example Usage:
-#global_graphs = cnor.CZBuildFaceRecognitionGraphs( 240, 320 )
-#output = cnor.CZHighlightImage( img, cnor.CZMultiScaleDetectObjects( img, global_graphs ) )
-
-
-import tensorflow as tf
-import numpy as np
-
-from PIL import Image
-from PIL import ImageDraw
-import json
-import time
-import sys
-import math
-import os
 
 #Public Interfaces
 
-def CZReadNN( fileName ):
-    with open( fileName, 'r' ) as infile:
-       j = json.load( infile )
-    return j
-
-CZFaceNetParameters = CZReadNN( os.path.join(os.path.expanduser('~'), 'FaceNet.json' ) )
-
-#This returns a list of tuples, where first item in tuple is the image placeholder
-#and the second item in the tuple is a tensorflow tensor of probabilities indicating
-#presence of object
-def CZBuildObjectRecognitionGraphs( parameters, width, height ):
-
-    initImgs = buildImagePyramid( Image.new( 'L', (width,height), 0 ) )
-    gl = []
-    for s in range( len(initImgs) ):
-        x_image = tf.placeholder( tf.float32, shape=[ 1, initImgs[s].height, initImgs[s].width, 1 ] )
-        gr1 = buildObjectRecognitionGraph( x_image, parameters )
-        gl.append( (x_image, gr1 ) )
-
-    return gl
-
-
 def CZBuildFaceRecognitionGraphs( width, height ):
     return CZBuildObjectRecognitionGraphs( CZFaceNetParameters, width, height )
-
-CZFaceDetectSession = tf.Session()
-
-#Note the conceptual difference with the CognitoZoo Mathematica implementation.
-#Here we are making a single TensorFlow call to process all images at different scale.
-#whereas MXNet implementation makes one call per image scale.
-def CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold=0.997 ):
-
-    images = buildImagePyramid( pilImage.convert( 'L' ) )
-
-    npImages = [ np.array( image ) / 255.0 for image in images ]
-
-    tfOutputs = [ graph[1] for graph in tfGraphs ]
-
-    fd = { tfGraphs[s][0] : [ np.array( [ npImages[s] ] ).transpose( 1,2,0 ) ] for s in range( len( images ) ) }
-
-    outputPyramid = CZFaceDetectSession.run( tfOutputs, feed_dict = fd )
-
-    objRet = []
-    for s in range( len( outputPyramid ) ):
-        objs = extractObjects( outputPyramid[s], threshold )
-
-        extractPositions = np.transpose( np.nonzero( outputPyramid[s][0][:,:,0] > threshold ) )
-        objs = list( map( lambda x: (outputPyramid[s][0][:,:,0][x[0],x[1]],x[1]*4,x[0]*4), extractPositions ) )
-
-        scale = pilImage.width / images[s].width
-        for obj in objs:
-            objRet.append( ( obj[0], ( scale*(16 + obj[1]-16), scale*(16 + obj[2]-16) ), ( scale*(16 + obj[1]+16), scale*(16 + obj[2]+16) ) ) )
-
-    return objRet
 
 def CZDetectFaces( pilImage, tfGraphs, threshold=0.997 ):
     return CZDeleteOverlappingWindows( CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold ) )
@@ -112,8 +60,96 @@ def CZHighlightFaces( pilImage, tfGraphs, threshold = .997 ):
 
     return img
 
+#Private Implementation Code
 
-#Private Code
+import tensorflow as tf
+import numpy as np
+
+from PIL import Image
+from PIL import ImageDraw
+import json
+import time
+import sys
+import math
+import os
+
+def CZReadNN( fileName ):
+    with open( fileName, 'r' ) as infile:
+       j = json.load( infile )
+    return j
+
+CZFaceNetParameters = CZReadNN( os.path.join(os.path.expanduser('~'), 'FaceNet.json' ) )
+
+#Takes a TensorFlow image array and builds a TensorFlow graph to process
+#that image using the model parameters specified in modelFilename.
+def buildObjectRecognitionGraph( tfImage, modelParameters ):
+
+    h_conv1 = tf.nn.tanh( conv2d( tfImage, CNConv2DWeights( modelParameters[0] ) ) )
+    h_pool1 = max_pool_2x2(h_conv1)
+
+    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CNConv2DWeights( modelParameters[1] ) ) )
+    h_pool2 = max_pool_2x2(h_conv2)
+
+    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CNConv2DWeights( modelParameters[2] ) ) )
+
+    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CNConv2DWeights( modelParameters[3] ) ) )
+
+    return ( h_conv4 )
+
+
+def extractObjects( outputMap, threshold ):
+    extractPositions = np.transpose( np.nonzero( outputMap[0][:,:,0] > threshold ) )
+    origCoords = list( map( lambda x: (x[1]*4,x[0]*4), extractPositions ) )
+    return origCoords
+
+def CNConv2DWeights( layer ):
+    return ( layer[0], layer[1] )
+
+#Takes an image as an argument and returns a pyramid of images
+
+#This returns a list of tuples, where first item in tuple is the image placeholder
+#and the second item in the tuple is a tensorflow tensor of probabilities indicating
+#presence of object
+def CZBuildObjectRecognitionGraphs( parameters, width, height ):
+
+    initImgs = buildImagePyramid( Image.new( 'L', (width,height), 0 ) )
+    gl = []
+    for s in range( len(initImgs) ):
+        x_image = tf.placeholder( tf.float32, shape=[ 1, initImgs[s].height, initImgs[s].width, 1 ] )
+        gr1 = buildObjectRecognitionGraph( x_image, parameters )
+        gl.append( (x_image, gr1 ) )
+
+    return gl
+
+CZFaceDetectSession = tf.Session()
+
+#Note the conceptual difference with the CognitoZoo Mathematica implementation.
+#Here we are making a single TensorFlow call to process all images at different scale.
+#whereas MXNet implementation makes one call per image scale.
+def CZMultiScaleDetectObjects( pilImage, tfGraphs, threshold=0.997 ):
+
+    images = buildImagePyramid( pilImage.convert( 'L' ) )
+
+    npImages = [ np.array( image ) / 255.0 for image in images ]
+
+    tfOutputs = [ graph[1] for graph in tfGraphs ]
+
+    fd = { tfGraphs[s][0] : [ np.array( [ npImages[s] ] ).transpose( 1,2,0 ) ] for s in range( len( images ) ) }
+
+    outputPyramid = CZFaceDetectSession.run( tfOutputs, feed_dict = fd )
+
+    objRet = []
+    for s in range( len( outputPyramid ) ):
+        objs = extractObjects( outputPyramid[s], threshold )
+
+        extractPositions = np.transpose( np.nonzero( outputPyramid[s][0][:,:,0] > threshold ) )
+        objs = list( map( lambda x: (outputPyramid[s][0][:,:,0][x[0],x[1]],x[1]*4,x[0]*4), extractPositions ) )
+
+        scale = pilImage.width / images[s].width
+        for obj in objs:
+            objRet.append( ( obj[0], ( scale*(16 + obj[1]-16), scale*(16 + obj[2]-16) ), ( scale*(16 + obj[1]+16), scale*(16 + obj[2]+16) ) ) )
+
+    return objRet
 
 def CZIntersection( a, b ):
     xa=max(a[0][0],b[0][0])
@@ -147,21 +183,6 @@ def CZDeleteOverlappingWindows( objects ):
 
     return filtered
 
-#Takes a TensorFlow image array and builds a TensorFlow graph to process
-#that image using the model parameters specified in modelFilename.
-def buildObjectRecognitionGraph( tfImage, modelParameters ):
-
-    h_conv1 = tf.nn.tanh( conv2d( tfImage, CNConv2DWeights( modelParameters[0] ) ) )
-    h_pool1 = max_pool_2x2(h_conv1)
-
-    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CNConv2DWeights( modelParameters[1] ) ) )
-    h_pool2 = max_pool_2x2(h_conv2)
-
-    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CNConv2DWeights( modelParameters[2] ) ) )
-
-    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CNConv2DWeights( modelParameters[3] ) ) )
-
-    return ( h_conv4 )
 
 def extractObjects( outputMap, threshold ):
     extractPositions = np.transpose( np.nonzero( outputMap[0][:,:,0] > threshold ) )
@@ -205,7 +226,6 @@ def CZBuildGenderRecognitionGraph():
 
     gh_pad2 = tf.pad( gh_pool1, paddings, "CONSTANT")
     gh_conv2 = tf.nn.tanh( conv2d( gh_pad2, CNConv2DWeights( genderNetParameters[1] ) ) )
-    #gh_pool2 = max_pool_2x2( gh_conv2 )
     gh_pool2 = tf.nn.max_pool(gh_conv2, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
