@@ -83,24 +83,21 @@ def buildObjectRecognitionGraph():
 
     x_image = tf.placeholder( tf.float32, shape=[ 1, None, None, 1 ] )
 
-    h_conv1 = tf.nn.tanh( conv2d( x_image, CNConv2DWeights( CZFaceNetParameters[0] ) ) )
+    h_conv1 = tf.nn.tanh( conv2d( x_image, CZFaceNetParameters[0] ) )
     h_pool1 = max_pool_2x2(h_conv1)
 
-    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CNConv2DWeights( CZFaceNetParameters[1] ) ) )
+    h_conv2 = tf.nn.tanh( conv2d( h_pool1, CZFaceNetParameters[1] ) )
     h_pool2 = max_pool_2x2(h_conv2)
 
-    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CNConv2DWeights( CZFaceNetParameters[2] ) ) )
+    h_conv3 = tf.nn.tanh( conv2d( h_pool2, CZFaceNetParameters[2] ) )
 
-    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CNConv2DWeights( CZFaceNetParameters[3] ) ) )
+    h_conv4 = tf.nn.sigmoid( conv2d( h_conv3, CZFaceNetParameters[3] ) )
 
     return ( x_image, h_conv4 )
 
 #   Note the first part of w is the biases, the second is the weights
 def conv2d(x, w):
   return w[0] + tf.nn.conv2d(x, w[1], strides=[1, 1, 1, 1], padding='VALID')
-
-def CNConv2DWeights( layer ):
-    return ( layer[0], layer[1] )
 
 def max_pool_2x2(x):
   return tf.nn.max_pool(x, ksize=[1, 3, 3, 1],
@@ -177,17 +174,17 @@ def CZBuildGenderRecognitionGraph():
 
     paddings = [ [0, 0], [2, 2], [2, 2], [0, 0] ]
     gh_pad1 = tf.pad(gx_image, paddings, "CONSTANT")
-    gh_conv1 = tf.nn.tanh( conv2d( gh_pad1, CNConv2DWeights( genderNetParameters[0] ) ) )
+    gh_conv1 = tf.nn.tanh( conv2d( gh_pad1, genderNetParameters[0] ) )
     gh_pool1 = tf.nn.max_pool(gh_conv1, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
     gh_pad2 = tf.pad( gh_pool1, paddings, "CONSTANT")
-    gh_conv2 = tf.nn.tanh( conv2d( gh_pad2, CNConv2DWeights( genderNetParameters[1] ) ) )
+    gh_conv2 = tf.nn.tanh( conv2d( gh_pad2, genderNetParameters[1] ) )
     gh_pool2 = tf.nn.max_pool(gh_conv2, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
     gh_pad3 = tf.pad( gh_pool2, paddings, "CONSTANT")
-    gh_conv3 = tf.nn.tanh( conv2d( gh_pad3, CNConv2DWeights( genderNetParameters[2] ) ) )
+    gh_conv3 = tf.nn.tanh( conv2d( gh_pad3, genderNetParameters[2] ) )
     gh_pool3 = tf.nn.max_pool(gh_conv3, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
 
