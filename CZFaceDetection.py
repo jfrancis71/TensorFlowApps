@@ -8,8 +8,7 @@
 #   Proc. IEEE International Conference on Image Processing (ICIP), Paris, France, Oct. 27-30, 2014.
 #
 #   Example use:
-#      global_graphs = cnor.CZBuildFaceRecognitionGraphs( 240, 320 )
-#      output = cnor.CZHighlightImage( img, cnor.CZMultiScaleDetectObjects( img, global_graphs ) )
+#      output = CZFaceDetection.CZHighlightImage( img, cnor.CZDetectFaces( img ) )
 #
 #   You need to download the following two files and install them somewhere on youe search path.
 #   FaceNet2Convolve.json from https://drive.google.com/file/d/0Bzhe0pgVZtNUMFhfcGJwRE9sRWc/view?usp=sharing
@@ -19,6 +18,7 @@
 
 #Public Interfaces
 
+#Timing: Approx 0.85s for 240x320 on MacOSX CPU
 def CZDetectFaces( pilImage, threshold=0.997 ):
     return CZDeleteOverlappingWindows( CZMultiScaleDetectObjects( pilImage, CZFaceNet, threshold ) )
 
@@ -109,37 +109,32 @@ def max_pool_2x2(x):
 CZFaceNet = buildObjectRecognitionGraph()
 CZFaceDetectSession = tf.Session()
 
+def CZSingleScaleDetectObjects( pilImage, tfGraph, threshold=0.997 ):
+    npImage = np.array( pilImage.convert( 'L' ) ) / 255.0
+
+    image = [ np.array( [ npImage ] ).transpose( 1,2,0 ) ]
+
+    outputMap = CZFaceDetectSession.run( tfGraph[1], feed_dict = { tfGraph[0] : image } )
+
+    extractPositions = np.transpose( np.nonzero( outputMap[0][:,:,0] > threshold ) )
+    objs = list( map( lambda x: (outputMap[0][:,:,0][x[0],x[1]],x[1]*4,x[0]*4), extractPositions ) )
+
+    return objs
 
 def CZMultiScaleDetectObjects( pilImage, tfGraph, threshold=0.997 ):
 
-    images = buildImagePyramid( pilImage.convert( 'L' ) )
-
-    npImages = [ np.array( image ) / 255.0 for image in images ]
-
-    fd = [  [ np.array( [ npImages[s] ] ).transpose( 1,2,0 ) ] for s in range( len( images ) ) ]
-
-    outputPyramid = [ CZFaceDetectSession.run( tfGraph[1], feed_dict = { tfGraph[0] : image } ) for image in fd ]
-
     objRet = []
-    for s in range( len( outputPyramid ) ):
-        extractPositions = np.transpose( np.nonzero( outputPyramid[s][0][:,:,0] > threshold ) )
-        objs = list( map( lambda x: (outputPyramid[s][0][:,:,0][x[0],x[1]],x[1]*4,x[0]*4), extractPositions ) )
-        scale = pilImage.width / images[s].width
-        for obj in objs:
-            objRet.append( ( obj[0], ( scale*(16 + obj[1]-16), scale*(16 + obj[2]-16) ), ( scale*(16 + obj[1]+16), scale*(16 + obj[2]+16) ) ) )
-
-    return objRet
-
-#Takes an image as an argument and returns a pyramid of images
-#ie list of images of decreasing sizes
-def buildImagePyramid( pilImage ):
-    images = []
     for s in range( -1 + int( ( math.log( 32 ) - math.log( pilImage.width ) ) / math.log (.8 ) ) ):
         height = pilImage.height * .8**s
         width  = pilImage.width * .8**s
         print( "idx = ", s, " width = ", width )
-        images.append( pilImage.resize( ( int(width), int(height) ) ) )
-    return images
+        image = pilImage.resize( ( int(width), int(height) ) )
+        objs = CZSingleScaleDetectObjects( image, tfGraph, threshold )
+        scale = pilImage.width / image.width
+        for obj in objs:
+            objRet.append( ( obj[0], ( scale*(16 + obj[1]-16), scale*(16 + obj[2]-16) ), ( scale*(16 + obj[1]+16), scale*(16 + obj[2]+16) ) ) )
+
+    return objRet
 
 def CZIntersection( a, b ):
     xa=max(a[0][0],b[0][0])
