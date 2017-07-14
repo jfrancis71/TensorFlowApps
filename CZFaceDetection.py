@@ -19,6 +19,13 @@
 #Public Interfaces
 
 #Timing: Approx 0.85s for 240x320 on MacOSX CPU
+#Works like FindFaces, ie returns { {{x1,y1},{x2,y2}},... }
+#   On the Caltech 1999 face dataset, we achieve a recognition rate of around 92% with
+#   an average of 14% of false positives/image.
+#   The Caltech dataset has 450 images where most faces are quite close to camera,
+#   where images are of size 896x592. Most of these images are of good quality, but some
+#   are challenging, eg. cartoon, significant obscuring of face or poor lighting conditions.
+#   Reference comparison, FindFaces achieves 99.6% recognition, but 56% average false positive rate/image
 def CZDetectFaces( pilImage, threshold=0.997 ):
     return CZDeleteOverlappingWindows( CZMultiScaleDetectObjects( pilImage, CZFaceNet, threshold ) )
 
@@ -33,11 +40,13 @@ def CZHighlightImage( pilImage, rectangles ):
 
     return img
 
+#returns a gender score ranging from 0 (most likely female) to 1 (most likely male
 def CZGender( pilImage ):
     norm = pilImage.convert( 'L' ).resize( ( 32, 32 ) )
     tfImage = [ np.array( [ np.array( norm ) ] ).transpose( (1,2,0) ) / 255. ]
     return CZFaceDetectSession.run( CZGenderNet[1], feed_dict = { CZGenderNet[0] : tfImage } )[0][0]
 
+#Draws bounding boxes around detected faces and attempts to determine likely gender
 def CZHighlightFaces( pilImage, threshold = .997 ):
     objs = CZDetectFaces( pilImage, threshold )
     img = pilImage.copy()
@@ -106,6 +115,18 @@ def max_pool_2x2(x):
 CZFaceNet = buildObjectRecognitionGraph()
 CZFaceDetectSession = tf.Session()
 
+# Conceptually it is a sliding window (32x32) object detector running at a single scale.
+#   In practice it is implemented convolutionally ( for performance reasons ) so the net
+#   should be fully convolutional, ie no fully connected layers.
+#   The net output should be a 2D array of numbers indicating a metric for likelihood of object being present.
+#   The net filter should accept an array of real numbers (ie this works on greyscale images). You can supply a
+#   colour image as input to the function, but this is just converted to greyscale before being fed to the neural net
+#   Note the geometric factor 4 in mapping from the output array to the input array, this is because we have
+#   downsampled twice in the neural network, so there is a coupling from this algorithm to the architecture
+#   of the neural net supplied.
+#   The rational for using a greyscale neural net is that I am particularly fascinated by shape (much more
+#   than colour), so wanted to look at performance driven by that factor alone. A commercial use might take
+#   a different view.
 def CZSingleScaleDetectObjects( pilImage, tfGraph, threshold=0.997 ):
     npImage = np.array( pilImage.convert( 'L' ) ) / 255.0
 
@@ -118,6 +139,14 @@ def CZSingleScaleDetectObjects( pilImage, tfGraph, threshold=0.997 ):
 
     return objs
 
+# Implements a sliding window object detector at multiple scales.
+#   The function resamples the image at scales ranging from a minimum width of 32 up to 800 at 20% scale increments.
+#   The maximum width of 800 was chosen for 2 reasons: to limit inference run time and to limit the number of likely
+#   false positives / image, implying the detector's limit is to recognise faces larger than 32/800 (4%) of the image width.
+#   Note that if for example you had high resolution images with faces in the far distance and wanted to detect those and were
+#   willing to accept false positives within the image, you might reconsider that tradeoff.
+#   However, the main use case was possibly high resolution images where faces are not too distant with objective of limiting
+#   false positives across the image as a whole.
 def CZMultiScaleDetectObjects( pilImage, tfGraph, threshold=0.997 ):
 
     objRet = []
