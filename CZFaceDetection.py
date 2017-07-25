@@ -71,11 +71,8 @@ def CZHighlightFaces( pilImage, threshold = .997 ):
 import tensorflow as tf
 import numpy as np
 
-from PIL import Image
 from PIL import ImageDraw
 import json
-import time
-import sys
 import math
 import os
 

@@ -4,19 +4,8 @@
 import tensorflow as tf
 import numpy as np
 
-import urllib
-import io
 from PIL import Image
-from PIL import ImageTk
-from PIL import ImageDraw
 import tkinter
-import numpy as np
-import json
-import time
-import sys
-import math
-import urllib.request as ur
-import urllib.request
 from io import BytesIO
 import requests
 import argparse
